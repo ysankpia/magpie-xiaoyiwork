@@ -77,10 +77,18 @@ export function methods({
                 const slots = slotsForUid(configDir, PROVIDER, uid);
                 if (slots.length) {
                   const who = session.displayName || uid;
+                  // 槽位键是 magpie 内部的（provider / provider#slot），别整串丢给用户看
+                  const where = slots
+                    .map((k) =>
+                      k === PROVIDER
+                        ? "主槽位"
+                        : `槽位 #${k.slice(PROVIDER.length + 1)}`,
+                    )
+                    .join("、");
                   return {
                     type: "failed",
                     error:
-                      `账号 ${who} 已经添加过了（${slots.join("、")}）。同一个账号只允许一个槽位；` +
+                      `账号 ${who} 已经添加过了（${where}）。同一个账号只允许一个槽位；` +
                       `要给同一个账号再开一个，先在编辑页打开「允许同一账号重复添加」。` +
                       `要添加的是**另一个**华为账号的话，请用无痕窗口重新登录。`,
                   };
