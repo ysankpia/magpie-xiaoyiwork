@@ -3,7 +3,13 @@
 // 目录接口缺 x-prd-pkg-name 头网关直接 400（Parameter is not valid）。
 // 账单 agentId=1 那路偶发 408，重试 3 次能显著提升成功率。
 
-import { HAG, HEADERS, PATHS, PLATFORM_AGENT_ID } from "../context.mjs";
+import {
+  HAG,
+  HEADERS,
+  PATHS,
+  PLATFORM_AGENT_ID,
+  PREMIUM_AGENT_ID,
+} from "../context.mjs";
 import { hagHeaders, postJson } from "./protocol.mjs";
 
 /** "消耗8x" / "8x" / 8 / "0.8" → "x8" / "x0.8"；归一不了返回 undefined */
@@ -119,6 +125,42 @@ export async function queryCatalog({ credential, uid, deviceId }, signal) {
  */
 const retryable = (status) => status >= 500 || status === 408 || status === 429;
 
+function billingBody(agentId, deviceId) {
+  return {
+    accountType: "HW_UID",
+    agentId,
+    endpoint: {
+      device: { brand: "HUAWEI", deviceId },
+      eduMode: "NONEDU",
+      foregroundPkgName: "",
+      isXiaoyiAPP: false,
+      language: "zh_CN",
+      languageMode: "MANDARIN",
+      locale: "default",
+    },
+  };
+}
+
+/**
+ * 只问「这张票现在还能用吗」，不重试、不看内容。
+ *
+ * 去重要靠它：同一个 uid 的旧槽位如果只是过期了（401），那是「重新登录」，
+ * 必须放行；只有旧票还活着才是真的重复添加。
+ * @returns {Promise<"alive"|"dead"|"unknown">}
+ */
+export async function probeCredential({ credential, uid, deviceId }, signal) {
+  if (!credential || !uid) return "dead";
+  const res = await postJson(`${HAG}${PATHS.billing}`, {
+    signal,
+    headers: hagHeaders({ credential, uid, deviceId }, { sse: false }),
+    body: billingBody(PREMIUM_AGENT_ID, deviceId),
+  }).catch(() => null);
+  if (!res) return "unknown";
+  if (res.status === 401) return "dead";
+  if (res.ok) return "alive";
+  return "unknown";
+}
+
 export async function queryBilling(
   agentId,
   { credential, uid, deviceId },
@@ -128,19 +170,7 @@ export async function queryBilling(
     const res = await postJson(`${HAG}${PATHS.billing}`, {
       signal,
       headers: hagHeaders({ credential, uid, deviceId }, { sse: false }),
-      body: {
-        accountType: "HW_UID",
-        agentId,
-        endpoint: {
-          device: { brand: "HUAWEI", deviceId },
-          eduMode: "NONEDU",
-          foregroundPkgName: "",
-          isXiaoyiAPP: false,
-          language: "zh_CN",
-          languageMode: "MANDARIN",
-          locale: "default",
-        },
-      },
+      body: billingBody(agentId, deviceId),
     }).catch(() => null);
     if (res?.ok) return unwrapEnvelope(res.json);
     // 网络异常（res 为 null）也重试；状态码不可重试就立刻收手

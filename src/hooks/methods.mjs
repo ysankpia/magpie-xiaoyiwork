@@ -18,7 +18,8 @@ import {
   startCallbackServer,
   exchangeCode,
 } from "../xiaoyi/oauth.mjs";
-import { slotsForUid } from "../duplicate.mjs";
+import { entriesForUid } from "../duplicate.mjs";
+import { probeCredential } from "../xiaoyi/billing.mjs";
 
 const INSTRUCTIONS =
   "用华为账号登录。注意：小艺Work 桌面端若开着会占用 17355 端口，请先退出它。" +
@@ -73,12 +74,19 @@ export function methods({
               if (cbCtx.signal?.aborted)
                 return { type: "failed", error: "登录已取消" };
               // ⚠ 去重必须在签票之前：签完才发现重复，旧票已经废了，两个槽位都不能用。
+              //   但「占着这个 uid」不等于重复：凭据过期后重新登录，槽位还在。
+              //   所以只拒「旧票还活着」的情况，死了就放行。
               if (!allowDuplicate()) {
-                const slots = slotsForUid(configDir, PROVIDER, uid);
-                if (slots.length) {
+                const entries = entriesForUid(configDir, PROVIDER, uid);
+                const live = [];
+                for (const entry of entries) {
+                  if ((await probeCredential(entry)) === "alive")
+                    live.push(entry.key);
+                }
+                if (live.length) {
                   const who = session.displayName || uid;
                   // 槽位键是 magpie 内部的（provider / provider#slot），别整串丢给用户看
-                  const where = slots
+                  const where = live
                     .map((k) =>
                       k === PROVIDER
                         ? "主槽位"
@@ -88,8 +96,8 @@ export function methods({
                   return {
                     type: "failed",
                     error:
-                      `账号 ${who} 已经添加过了（${where}）。同一个账号只允许一个槽位；` +
-                      `要给同一个账号再开一个，先在编辑页打开「允许同一账号重复添加」。` +
+                      `账号 ${who} 已经添加过了（${where}），而且那张凭据还能用。` +
+                      `同一个账号只允许一个槽位；要给同一个账号再开一个，先在编辑页打开「允许同一账号重复添加」。` +
                       `要添加的是**另一个**华为账号的话，请用无痕窗口重新登录。`,
                   };
                 }
