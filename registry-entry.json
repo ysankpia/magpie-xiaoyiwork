@@ -1,0 +1,9 @@
+{
+  "package": "magpie-xiaoyiwork",
+  "name": "小艺Work XiaoyiWork",
+  "providers": ["xiaoyiwork"],
+  "summary": {
+    "en": "Sign in to XiaoyiWork with a browser and use its DeepSeek-V4, GLM-5.3, Kimi K3.1, MiniMax M3.1 and openPangu models as OpenAI Chat Completions, with AI-point rates and quota cards.",
+    "zh": "浏览器登录小艺Work，把 DeepSeek-V4、GLM-5.3、Kimi K3.1、MiniMax M3.1、openPangu 接成 OpenAI Chat Completions，带 AI 点倍率与积分额度卡片。"
+  }
+}
